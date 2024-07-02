@@ -1,16 +1,16 @@
 package main
 
 import (
-	"log"
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+	"github.com/leidison/golang-simple-rest/middlewares"
 )
 
 type album struct {
-	ID     string  `form:"id"`
-	Title  string  `form:"title"`
+	ID     string  `form:"id" binding:"required"`
+	Title  string  `form:"title" binding:"required"`
 	Artist string  `form:"artist"`
 	Price  float64 `form:"price"`
 }
@@ -22,39 +22,30 @@ var albums = []album{
 }
 
 func main() {
+	godotenv.Load()
+
 	router := gin.Default()
 
-	router.Use(Logger())
+	// middlewares
+	jwtMiddleware := middlewares.Jwt()
+
+	// global middlewares
+	router.Use(middlewares.Logger())
+
+	// routes
 
 	albums := router.Group("/albums")
 	{
 		albums.GET("", getAlbums)
 		albums.GET(":id", getAlbumByID)
-		albums.POST("", postAlbums)
+
+		private := albums.Group("/").Use(jwtMiddleware)
+		{
+			private.POST("", postAlbums)
+		}
 	}
 
-	router.Run("localhost:8080")
-}
-
-func Logger() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		t := time.Now()
-
-		// Set example variable
-		c.Set("example", "12345")
-
-		// before request
-
-		c.Next()
-
-		// after request
-		latency := time.Since(t)
-		log.Print("latencia:", latency)
-
-		// access the status we are sending
-		status := c.Writer.Status()
-		log.Println(status)
-	}
+	router.Run("localhost:3000")
 }
 
 func getAlbums(c *gin.Context) {
@@ -62,20 +53,22 @@ func getAlbums(c *gin.Context) {
 }
 
 func postAlbums(c *gin.Context) {
-	var newAlbum album
+	var input album
 
 	// Call BindJSON to bind the received JSON to
 	// newAlbum.
-	if err := c.ShouldBind(&newAlbum); err != nil {
-		// show error
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := c.ShouldBind(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"message": err.Error(),
+		})
+
 		return
 	}
 
 	// Add the new album to the slice.
-	albums = append(albums, newAlbum)
+	albums = append(albums, input)
 
-	c.JSON(http.StatusCreated, newAlbum)
+	c.JSON(http.StatusCreated, input)
 }
 
 func getAlbumByID(c *gin.Context) {
