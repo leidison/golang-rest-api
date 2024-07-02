@@ -1,16 +1,18 @@
 package main
 
 import (
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
 type album struct {
-	ID     string  `json:"id"`
-	Title  string  `json:"title"`
-	Artist string  `json:"artist"`
-	Price  float64 `json:"price"`
+	ID     string  `form:"id"`
+	Title  string  `form:"title"`
+	Artist string  `form:"artist"`
+	Price  float64 `form:"price"`
 }
 
 var albums = []album{
@@ -22,11 +24,37 @@ var albums = []album{
 func main() {
 	router := gin.Default()
 
-	router.GET("/albums", getAlbums)
-	router.GET("/albums/:id", getAlbumByID)
-	router.POST("/albums", postAlbums)
+	router.Use(Logger())
+
+	albums := router.Group("/albums")
+	{
+		albums.GET("", getAlbums)
+		albums.GET(":id", getAlbumByID)
+		albums.POST("", postAlbums)
+	}
 
 	router.Run("localhost:8080")
+}
+
+func Logger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		t := time.Now()
+
+		// Set example variable
+		c.Set("example", "12345")
+
+		// before request
+
+		c.Next()
+
+		// after request
+		latency := time.Since(t)
+		log.Print("latencia:", latency)
+
+		// access the status we are sending
+		status := c.Writer.Status()
+		log.Println(status)
+	}
 }
 
 func getAlbums(c *gin.Context) {
@@ -38,7 +66,7 @@ func postAlbums(c *gin.Context) {
 
 	// Call BindJSON to bind the received JSON to
 	// newAlbum.
-	if err := c.BindJSON(&newAlbum); err != nil {
+	if err := c.ShouldBind(&newAlbum); err != nil {
 		// show error
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
